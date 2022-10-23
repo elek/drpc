@@ -17,6 +17,10 @@ import (
 	"storj.io/drpc/drpcstream"
 )
 
+type addrKey struct{}
+
+var SourceIP addrKey
+
 // Options controls configuration settings for a server.
 type Options struct {
 	// Manager controls the options we pass to the managers this server creates.
@@ -109,6 +113,7 @@ func (s *Server) Serve(ctx context.Context, lis net.Listener) (err error) {
 
 		// TODO(jeff): connection limits?
 		tracker.Run(func(ctx context.Context) {
+			ctx = context.WithValue(ctx, SourceIP, conn.RemoteAddr())
 			err := s.ServeOne(ctx, conn)
 			if err != nil && s.opts.Log != nil {
 				s.opts.Log(err)
@@ -124,4 +129,16 @@ func (s *Server) handleRPC(stream *drpcstream.Stream, rpc string) (err error) {
 		return errs.Wrap(stream.SendError(err))
 	}
 	return errs.Wrap(stream.CloseSend())
+}
+
+// GetSourceAddr returns the source address of the DRPC client, if set.
+func GetSourceAddr(ctx context.Context) *net.Addr {
+	value := ctx.Value(SourceIP)
+	if value == nil {
+		return nil
+	}
+	if addr, ok := value.(net.Addr); ok {
+		return &addr
+	}
+	return nil
 }
